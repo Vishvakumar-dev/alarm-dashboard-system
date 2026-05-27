@@ -5,10 +5,11 @@ import com.alarmdashboard.backend.dto.AlarmSummaryDto;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-@Service
-public class AlarmService{
 
-    public List<AlarmDto> getAllAlarms(){
+@Service
+public class AlarmService {
+
+    public List<AlarmDto> getAllAlarms() {
         return List.of(
                 new AlarmDto(1L, "Router-01", "Interface Down", "CRITICAL", "ACTIVE", "10.10.1.1", "2026-05-27 10:30:00"),
                 new AlarmDto(2L, "Switch-02", "High CPU Usage", "MAJOR", "ACTIVE", "10.10.1.2", "2026-05-27 10:40:00"),
@@ -17,14 +18,27 @@ public class AlarmService{
         );
     }
 
-    public AlarmSummaryDto getAlarmSummary(){
+    public AlarmSummaryDto getAlarmSummary() {
         List<AlarmDto> alarms = getAllAlarms();
-        Long total = alarms.size();
-        Long critical = alarms.stream().filter(alarm -> alarm.getSeverity().equalsIgnoreCase("Critical").count());
-        Long major = alarms.stream().filter(alarm -> alarm.getSeverity().equalsIgnoreCase("Major").count());
-        Long minor = alarms.stream().filter(alarm -> alarm.getSeverity().equalsIgnoreCase("minor").count());
-        Long cleared = alarms.stream().filter(alarm -> alarm.getSeverity().equalsIgnoreCase("cleared").count());
 
-        return new AlarmSummaryDto(total, critical, major,minor, cleared);
+        long total = alarms.size();
+
+        long critical = alarms.stream()
+                .filter(alarm -> alarm.getSeverity().equalsIgnoreCase("CRITICAL"))
+                .count();
+
+        long major = alarms.stream()
+                .filter(alarm -> alarm.getSeverity().equalsIgnoreCase("MAJOR"))
+                .count();
+
+        long minor = alarms.stream()
+                .filter(alarm -> alarm.getSeverity().equalsIgnoreCase("MINOR"))
+                .count();
+
+        long cleared = alarms.stream()
+                .filter(alarm -> alarm.getStatus().equalsIgnoreCase("CLEARED"))
+                .count();
+
+        return new AlarmSummaryDto(total, critical, major, minor, cleared);
     }
 }

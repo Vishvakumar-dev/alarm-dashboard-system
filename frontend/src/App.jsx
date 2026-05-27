@@ -1,38 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
-
-const alerts = [
-  {
-    id: 1,
-    name: 'Interface Down',
-    device: 'Router-01',
-    service: 'Network',
-    severity: 'CRITICAL',
-    status: 'ACTIVE',
-    sourceIp: '10.10.1.1',
-    createdTime: '2026-05-27 10:30:00',
-  },
-  {
-    id: 2,
-    name: 'High CPU Usage',
-    device: 'Switch-02',
-    service: 'Device Health',
-    severity: 'MAJOR',
-    status: 'ACTIVE',
-    sourceIp: '10.10.1.2',
-    createdTime: '2026-05-27 10:40:00',
-  },
-  {
-    id: 3,
-    name: 'Link Restored',
-    device: 'Firewall-01',
-    service: 'WAN',
-    severity: 'MINOR',
-    status: 'CLEARED',
-    sourceIp: '10.10.1.3',
-    createdTime: '2026-05-27 11:00:00',
-  },
-]
+import { fetchAlarms, fetchAlarmSummary } from './services/alarmApi'
 
 const services = [
   {
@@ -63,6 +31,10 @@ const services = [
 
 function App() {
   const [activePage, setActivePage] = useState('Home')
+  const [alerts, setAlerts] = useState([])
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const menuItems = [
     'Home',
@@ -72,6 +44,28 @@ function App() {
     'Configurations',
     'Monitoring',
   ]
+
+  async function loadDashboardData() {
+    try {
+      setLoading(true)
+      setError('')
+
+      const summaryData = await fetchAlarmSummary()
+      const alarmData = await fetchAlarms()
+
+      setSummary(summaryData)
+      setAlerts(alarmData)
+    } catch (err) {
+      console.error(err)
+      setError('Unable to load alarm dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
 
   return (
     <div className="app-shell">
@@ -101,12 +95,30 @@ function App() {
       <main className="main-content">
         <TopBar activePage={activePage} />
 
-        {activePage === 'Home' && <HomePage />}
-        {activePage === 'Alerts' && <AlertsPage />}
-        {activePage === 'Services' && <ServicesPage />}
-        {activePage === 'Devices' && <PlaceholderPage title="Devices" />}
-        {activePage === 'Configurations' && <PlaceholderPage title="Configurations" />}
-        {activePage === 'Monitoring' && <PlaceholderPage title="Monitoring" />}
+        {loading && <LoadingPage />}
+        {error && !loading && <ErrorPage message={error} onRetry={loadDashboardData} />}
+
+        {!loading && !error && activePage === 'Home' && (
+          <HomePage summary={summary} onRefresh={loadDashboardData} />
+        )}
+
+        {!loading && !error && activePage === 'Alerts' && (
+          <AlertsPage alerts={alerts} onRefresh={loadDashboardData} />
+        )}
+
+        {!loading && !error && activePage === 'Services' && <ServicesPage />}
+
+        {!loading && !error && activePage === 'Devices' && (
+          <PlaceholderPage title="Devices" />
+        )}
+
+        {!loading && !error && activePage === 'Configurations' && (
+          <PlaceholderPage title="Configurations" />
+        )}
+
+        {!loading && !error && activePage === 'Monitoring' && (
+          <PlaceholderPage title="Monitoring" />
+        )}
       </main>
     </div>
   )
@@ -132,16 +144,22 @@ function TopBar({ activePage }) {
   )
 }
 
-function HomePage() {
+function HomePage({ summary, onRefresh }) {
   return (
     <section className="page">
-      <h2>Dashboard Overview</h2>
+      <div className="section-header">
+        <h2>Dashboard Overview</h2>
+        <div className="action-buttons">
+          <button onClick={onRefresh}>Refresh</button>
+        </div>
+      </div>
 
       <div className="summary-grid">
-        <SummaryCard title="Total Alerts" value="128" color="blue" />
-        <SummaryCard title="Critical Alerts" value="12" color="red" />
-        <SummaryCard title="Major Alerts" value="34" color="orange" />
-        <SummaryCard title="Services Running" value="18" color="green" />
+        <SummaryCard title="Total Alerts" value={summary.total} color="blue" />
+        <SummaryCard title="Critical Alerts" value={summary.critical} color="red" />
+        <SummaryCard title="Major Alerts" value={summary.major} color="orange" />
+        <SummaryCard title="Minor Alerts" value={summary.minor} color="yellow" />
+        <SummaryCard title="Cleared Alerts" value={summary.cleared} color="green" />
       </div>
 
       <div className="content-card">
@@ -154,7 +172,7 @@ function HomePage() {
   )
 }
 
-function AlertsPage() {
+function AlertsPage({ alerts, onRefresh }) {
   return (
     <section className="page">
       <FilterPanel />
@@ -162,6 +180,7 @@ function AlertsPage() {
       <div className="section-header">
         <h2>Alerts</h2>
         <div className="action-buttons">
+          <button onClick={onRefresh}>Refresh</button>
           <button>Import</button>
           <button>Export</button>
           <button className="primary">+ Add Alert</button>
@@ -195,9 +214,9 @@ function AlertsPage() {
                   <input type="checkbox" />
                 </td>
                 <td>{alert.id}</td>
-                <td className="link-text">{alert.name}</td>
-                <td>{alert.device}</td>
-                <td>{alert.service}</td>
+                <td className="link-text">{alert.alarmName}</td>
+                <td>{alert.deviceName}</td>
+                <td>Network</td>
                 <td>
                   <span className={`badge ${alert.severity.toLowerCase()}`}>
                     {alert.severity}
@@ -346,6 +365,27 @@ function PlaceholderPage({ title }) {
   )
 }
 
+function LoadingPage() {
+  return (
+    <section className="page">
+      <div className="content-card">
+        <h2>Loading alarm dashboard...</h2>
+      </div>
+    </section>
+  )
+}
+
+function ErrorPage({ message, onRetry }) {
+  return (
+    <section className="page">
+      <div className="content-card">
+        <h2>{message}</h2>
+        <button onClick={onRetry}>Retry</button>
+      </div>
+    </section>
+  )
+}
+
 function getMenuIcon(item) {
   const icons = {
     Home: '▦',
@@ -359,4 +399,4 @@ function getMenuIcon(item) {
   return icons[item] || '•'
 }
 
-export default App
+export default App  
